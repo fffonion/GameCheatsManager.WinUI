@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing or new release tag to upload assets to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-singlefile:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore .\GameCheatsManager.WinUI.csproj
+
+      - name: Build zipped single-file bundle
+        run: dotnet build .\GameCheatsManager.WinUI.csproj -c Release -t:BuildSingleFileBundle -v minimal
+
+      - name: Resolve release metadata
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'release') { '${{ github.event.release.tag_name }}' } else { '${{ inputs.tag }}' }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw 'Release tag is required.'
+          }
+
+          $bundlePath = Join-Path $PWD 'artifacts\release\win-x64\GameCheatsManager.WinUI.zip'
+          if (-not (Test-Path $bundlePath)) {
+            throw "Single-file bundle not found at $bundlePath"
+          }
+
+          $assetName = "GameCheatsManager.WinUI-$tag-win-x64.zip"
+          $shaPath = "$bundlePath.sha256"
+          $hash = (Get-FileHash $bundlePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path $shaPath -Value "$hash *$assetName"
+
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_ASSET_NAME=$assetName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_BUNDLE_PATH=$bundlePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_SHA_PATH=$shaPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create release when manually triggered
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --title $env:RELEASE_TAG --generate-notes
+          }
+
+      - name: Upload release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $bundleAsset = "{0}#{1}" -f $env:RELEASE_BUNDLE_PATH, $env:RELEASE_ASSET_NAME
+          $shaAsset = "{0}#{1}.sha256" -f $env:RELEASE_SHA_PATH, $env:RELEASE_ASSET_NAME
+          gh release upload $env:RELEASE_TAG $bundleAsset $shaAsset --clobber --repo $env:GITHUB_REPOSITORY
