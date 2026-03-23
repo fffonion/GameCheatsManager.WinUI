@@ -9,6 +9,9 @@ public sealed class SettingsService
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
         WriteIndented = true
     };
 
@@ -18,35 +21,40 @@ public sealed class SettingsService
         Directory.CreateDirectory(AppPaths.DatabaseDirectory);
 
         var defaults = CreateDefaults();
-        if (!File.Exists(AppPaths.SettingsFile))
-        {
-            Directory.CreateDirectory(defaults.DownloadPath);
-            await SaveAsync(defaults);
-            return defaults;
-        }
+        var settings = await LoadStoredSettingsAsync(defaults);
+        settings = MergeWithDefaults(settings, defaults);
+        settings.DownloadPath = ResolveDownloadPath(settings.DownloadPath, defaults.DownloadPath);
+        settings.WeModPath = NormalizeOptionalPath(settings.WeModPath);
+        settings.CePath = NormalizeOptionalPath(settings.CePath);
+        settings.CevoPath = NormalizeOptionalPath(settings.CevoPath);
 
-        try
-        {
-            await using var stream = File.OpenRead(AppPaths.SettingsFile);
-            var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOptions) ?? defaults;
-            settings = MergeWithDefaults(settings, defaults);
-            Directory.CreateDirectory(settings.DownloadPath);
-            await SaveAsync(settings);
-            return settings;
-        }
-        catch
-        {
-            Directory.CreateDirectory(defaults.DownloadPath);
-            await SaveAsync(defaults);
-            return defaults;
-        }
+        await SaveAsync(settings);
+        return settings;
     }
 
     public async Task SaveAsync(AppSettings settings)
     {
         Directory.CreateDirectory(AppPaths.SettingsDirectory);
-        await using var stream = File.Create(AppPaths.SettingsFile);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
+        var tempFile = $"{AppPaths.SettingsFile}.tmp";
+        if (File.Exists(tempFile))
+        {
+            File.Delete(tempFile);
+        }
+
+        await using (var stream = File.Create(tempFile))
+        {
+            await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
+            await stream.FlushAsync();
+        }
+
+        if (File.Exists(AppPaths.SettingsFile))
+        {
+            File.Replace(tempFile, AppPaths.SettingsFile, null, ignoreMetadataErrors: true);
+        }
+        else
+        {
+            File.Move(tempFile, AppPaths.SettingsFile);
+        }
     }
 
     private static AppSettings CreateDefaults() =>
@@ -93,6 +101,69 @@ public sealed class SettingsService
         current.CePath = string.IsNullOrWhiteSpace(current.CePath) ? defaults.CePath : current.CePath;
         current.CevoPath ??= string.Empty;
         return current;
+    }
+
+    private static async Task<AppSettings> LoadStoredSettingsAsync(AppSettings defaults)
+    {
+        if (!File.Exists(AppPaths.SettingsFile))
+        {
+            return defaults;
+        }
+
+        try
+        {
+            await using var stream = File.OpenRead(AppPaths.SettingsFile);
+            return await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOptions) ?? defaults;
+        }
+        catch
+        {
+            return defaults;
+        }
+    }
+
+    private static string ResolveDownloadPath(string? savedPath, string fallbackPath)
+    {
+        if (TryEnsureDirectory(savedPath, out var resolvedPath))
+        {
+            return resolvedPath;
+        }
+
+        if (TryEnsureDirectory(fallbackPath, out resolvedPath))
+        {
+            return resolvedPath;
+        }
+
+        var emergencyPath = Path.Combine(Path.GetTempPath(), "GCM Trainers");
+        if (TryEnsureDirectory(emergencyPath, out resolvedPath))
+        {
+            return resolvedPath;
+        }
+
+        return fallbackPath;
+    }
+
+    private static string NormalizeOptionalPath(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? string.Empty : path;
+
+    private static bool TryEnsureDirectory(string? path, out string normalizedPath)
+    {
+        normalizedPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            normalizedPath = Path.GetFullPath(path);
+            Directory.CreateDirectory(normalizedPath);
+            return true;
+        }
+        catch
+        {
+            normalizedPath = string.Empty;
+            return false;
+        }
     }
 
     private static string GetDefaultLanguage()
