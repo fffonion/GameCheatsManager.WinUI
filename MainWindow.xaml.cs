@@ -130,6 +130,7 @@ public sealed partial class MainWindow : Window
         var windowHandle = WindowNative.GetWindowHandle(this);
         var windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
         var appWindow = AppWindow.GetFromWindowId(windowId);
+        ApplyWindowIcon(appWindow);
         var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
         var width = Math.Min(preferredWidth, Math.Max(1200, displayArea.WorkArea.Width - 40));
         var height = Math.Min(preferredHeight, Math.Max(900, displayArea.WorkArea.Height - 40));
@@ -139,6 +140,30 @@ public sealed partial class MainWindow : Window
         var centeredX = displayArea.WorkArea.X + Math.Max(0, (displayArea.WorkArea.Width - width) / 2);
         var centeredY = displayArea.WorkArea.Y + Math.Max(0, (displayArea.WorkArea.Height - height) / 2);
         appWindow.Move(new PointInt32(centeredX, centeredY));
+    }
+
+    private static void ApplyWindowIcon(AppWindow appWindow)
+    {
+        try
+        {
+            var iconPath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(iconPath) || !File.Exists(iconPath))
+            {
+                var assetIconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "app-icon.ico");
+                if (File.Exists(assetIconPath))
+                {
+                    iconPath = assetIconPath;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+            {
+                appWindow.SetIcon(iconPath);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private void ApplyLocalization()
