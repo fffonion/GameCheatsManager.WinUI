@@ -13,6 +13,11 @@
     <EnableMsixTooling>false</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <LangVersion>preview</LangVersion>
+    <EnableDefaultApplicationDefinitionItems>false</EnableDefaultApplicationDefinitionItems>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -23,39 +28,24 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Game-Cheats-Manager\**\*.cs" />
-    <Compile Remove="GameCheatsManager.WinUI\**\*.cs" />
-    <Compile Remove="obj-*\**\*.cs" />
-    <Content Remove="artifacts\**" />
-    <Content Remove="Game-Cheats-Manager\**" />
-    <Content Remove="GameCheatsManager.WinUI\**" />
-    <Content Remove="obj-*\**" />
-    <Content Remove=".github\**" />
-    <EmbeddedResource Remove="artifacts\**" />
-    <EmbeddedResource Remove="Game-Cheats-Manager\**" />
-    <EmbeddedResource Remove="GameCheatsManager.WinUI\**" />
-    <EmbeddedResource Remove="obj-*\**" />
-    <EmbeddedResource Remove=".github\**" />
-    <None Remove="artifacts\**" />
-    <None Remove="Game-Cheats-Manager\**" />
-    <None Remove="GameCheatsManager.WinUI\**" />
-    <None Remove="obj-*\**" />
-    <None Remove=".github\**" />
-    <None Remove=".gitignore" />
-    <None Remove="Game-Cheats-Manager-Sharp.sln" />
-    <None Remove="README.md" />
-    <Page Remove="GameCheatsManager.WinUI\**\*.xaml" />
-    <Page Remove="obj-*\**\*.xaml" />
+    <Page Include="MainWindow.xaml" />
+    <Compile Include="App.xaml.cs" />
+    <Compile Include="MainWindow.xaml.cs" />
+    <Compile Include="Interop\**\*.cs" />
+    <Compile Include="Models\**\*.cs" />
+    <Compile Include="Services\**\*.cs" />
+    <None Include="app.manifest" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="Assets\logo.png" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="Game-Cheats-Manager\src\assets\logo.png" Link="Assets\logo.png">
+    <None Include="Assets\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="Dependencies\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

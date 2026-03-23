@@ -1,6 +1,9 @@
 # Game Cheats Manager WinUI 3 Port
 
-This project is a WinUI 3 port of the original Python `Game-Cheats-Manager` app in the sibling `Game-Cheats-Manager` folder.
+This project is a WinUI 3 port of the original Python `Game-Cheats-Manager` application.
+
+Original upstream project:
+`https://github.com/dyang886/Game-Cheats-Manager`
 
 ## What is ported
 
@@ -15,9 +18,8 @@ This project is a WinUI 3 port of the original Python `Game-Cheats-Manager` app 
 The original app depends on private backend values that are not committed to source control. The WinUI port keeps those values out of tracked files and resolves them in this order:
 
 1. Environment variables
-2. `Game-Cheats-Manager/secret_config.py`
-3. `Game-Cheats-Manager/src/scripts/secret_config.py`
-4. `secret_config.py` in the workspace root
+2. `secret_config.py` in the project root
+3. `secret_config.py` next to the built executable
 
 Supported variables:
 
@@ -28,6 +30,10 @@ Supported variables:
 - `CLIENT_API_KEY`
 
 If those values are missing, the WinUI app still builds and the local-library features still work, but signed-download/upload/version/patch flows that depend on the original backend will be unavailable.
+
+## Project-local runtime assets
+
+The WinUI project ships its own runtime assets under `Assets` and `Dependencies`. It does not depend on files from any external local clone path at runtime.
 
 ## Build
 

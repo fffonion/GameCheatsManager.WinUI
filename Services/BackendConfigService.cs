@@ -63,8 +63,40 @@ public sealed class BackendConfigService
 
     private static IEnumerable<string> GetSecretConfigCandidates()
     {
-        yield return Path.Combine(AppPaths.OriginalProjectRoot, "secret_config.py");
-        yield return Path.Combine(AppPaths.OriginalProjectRoot, "src", "scripts", "secret_config.py");
-        yield return Path.Combine(AppPaths.WorkspaceRoot, "secret_config.py");
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var candidate in EnumerateConfigCandidates(AppPaths.AppRoot))
+        {
+            if (seen.Add(candidate))
+            {
+                yield return candidate;
+            }
+        }
+
+        foreach (var candidate in EnumerateConfigCandidates(AppContext.BaseDirectory))
+        {
+            if (seen.Add(candidate))
+            {
+                yield return candidate;
+            }
+        }
+
+        foreach (var candidate in EnumerateConfigCandidates(Directory.GetCurrentDirectory()))
+        {
+            if (seen.Add(candidate))
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateConfigCandidates(string startDirectory)
+    {
+        var current = new DirectoryInfo(startDirectory);
+        while (current is not null)
+        {
+            yield return Path.Combine(current.FullName, "secret_config.py");
+            current = current.Parent;
+        }
     }
 }

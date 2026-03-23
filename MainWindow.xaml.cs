@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.Json;
 using GameCheatsManager.WinUI.Models;
 using GameCheatsManager.WinUI.Services;
@@ -21,7 +22,8 @@ public sealed partial class MainWindow : Window
     private const string AppVersion = "2.5.0-beta.3";
     private const string WebsiteLink = "https://gamezonelabs.com";
     private const string AllTrainersLink = "https://gamezonelabs.com/products/game-cheats-manager/trainers";
-    private const string GithubLink = "https://github.com/dyang886/Game-Cheats-Manager";
+    private const string GithubLink = "https://github.com/fffonion/GameCheatsManager.WinUI";
+    private const string GithubReleasesLink = "https://github.com/fffonion/GameCheatsManager.WinUI/releases";
     private const string BilibiliLink = "https://space.bilibili.com/256673766";
 
     private readonly SettingsService _settingsService = new();
@@ -179,6 +181,61 @@ public sealed partial class MainWindow : Window
 
     private string Tr(string text) => _localizationService.Translate(text, _settings.Language);
 
+    private string Trf(string text, params object[] args) => string.Format(CultureInfo.CurrentCulture, Tr(text), args);
+
+    private string LocalizeUserText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        const string updatingPrefix = "Updating ";
+        if (text.StartsWith(updatingPrefix, StringComparison.Ordinal) && text.EndsWith("...", StringComparison.Ordinal))
+        {
+            var name = text.Substring(updatingPrefix.Length, text.Length - updatingPrefix.Length - 3);
+            return Trf("Updating {0}...", name);
+        }
+
+        const string unsupportedTrainerOriginPrefix = "Unsupported trainer origin: ";
+        if (text.StartsWith(unsupportedTrainerOriginPrefix, StringComparison.Ordinal))
+        {
+            return Trf("Unsupported trainer origin: {0}", text.Substring(unsupportedTrainerOriginPrefix.Length));
+        }
+
+        const string movingTrainerErrorPrefix = "An error occurred when moving trainer: ";
+        if (text.StartsWith(movingTrainerErrorPrefix, StringComparison.Ordinal))
+        {
+            return Trf("An error occurred when moving trainer: {0}", text.Substring(movingTrainerErrorPrefix.Length));
+        }
+
+        const string extractArchiveErrorPrefix = "An error occurred while extracting archive: ";
+        if (text.StartsWith(extractArchiveErrorPrefix, StringComparison.Ordinal))
+        {
+            return Trf("An error occurred while extracting archive: {0}", text.Substring(extractArchiveErrorPrefix.Length));
+        }
+
+        const string extractDownloadedTrainerErrorPrefix = "An error occurred while extracting downloaded trainer: ";
+        if (text.StartsWith(extractDownloadedTrainerErrorPrefix, StringComparison.Ordinal))
+        {
+            return Trf("An error occurred while extracting downloaded trainer: {0}", text.Substring(extractDownloadedTrainerErrorPrefix.Length));
+        }
+
+        const string wandUpdaterStateErrorPrefix = "Failed to update Wand updater state: ";
+        if (text.StartsWith(wandUpdaterStateErrorPrefix, StringComparison.Ordinal))
+        {
+            return Trf("Failed to update Wand updater state: {0}", text.Substring(wandUpdaterStateErrorPrefix.Length));
+        }
+
+        const string deletedWandVersionPrefix = "Deleted Wand version: ";
+        if (text.StartsWith(deletedWandVersionPrefix, StringComparison.Ordinal))
+        {
+            return Trf("Deleted Wand version: {0}", text.Substring(deletedWandVersionPrefix.Length));
+        }
+
+        return Tr(text);
+    }
+
     private async Task ApplyBackendFallbacksAsync()
     {
         if (_backendConfig.HasSignedDownloadConfig)
@@ -212,9 +269,9 @@ public sealed partial class MainWindow : Window
             var mainExists = File.Exists(Path.Combine(AppPaths.DatabaseDirectory, "fling_main.html"));
             if (!archiveExists || !mainExists)
             {
-                AddStatusLine("Updating FLiNG data...");
+                AddStatusLine(Tr("Updating FLiNG data..."));
                 var success = await _trainerCatalogService.FetchFlingDataAsync(_settings);
-                AddStatusLine(success ? "FLiNG data updated." : "FLiNG data update failed.", success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+                AddStatusLine(Tr(success ? "FLiNG data updated." : "FLiNG data update failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
             }
         }
     }
@@ -309,14 +366,14 @@ public sealed partial class MainWindow : Window
         return $"{size} B";
     }
 
-    private ContentDialog CreateDialog(string title, UIElement content, string? primaryButtonText = null, string closeButtonText = "Close")
+    private ContentDialog CreateDialog(string title, UIElement content, string? primaryButtonText = null, string? closeButtonText = null)
     {
         return new ContentDialog
         {
             Title = title,
             Content = content,
             PrimaryButtonText = primaryButtonText ?? string.Empty,
-            CloseButtonText = closeButtonText,
+            CloseButtonText = closeButtonText ?? Tr("Close"),
             DefaultButton = string.IsNullOrWhiteSpace(primaryButtonText) ? ContentDialogButton.Close : ContentDialogButton.Primary,
             XamlRoot = RootGrid.XamlRoot
         };
@@ -389,13 +446,13 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                AddStatusLine($"Search returned {results.Count} trainer(s).", InfoBarSeverity.Success);
+                AddStatusLine(Trf("Search returned {0} trainer(s).", results.Count), InfoBarSeverity.Success);
             }
         }
         catch (Exception ex)
         {
             ShowNotification(Tr("Search Failed"), ex.Message, InfoBarSeverity.Error);
-            AddStatusLine($"Search failed: {ex.Message}", InfoBarSeverity.Error);
+            AddStatusLine(Trf("Search failed: {0}", ex.Message), InfoBarSeverity.Error);
         }
         finally
         {
@@ -416,20 +473,21 @@ public sealed partial class MainWindow : Window
         while (_downloadQueue.Count > 0)
         {
             var next = _downloadQueue.Dequeue();
-            UpdateOperationStatus(!string.IsNullOrWhiteSpace(next.TrainerDirectory) ? $"Updating {next.DisplayName}..." : Tr("Download"));
+            UpdateOperationStatus(!string.IsNullOrWhiteSpace(next.TrainerDirectory) ? Trf("Updating {0}...", next.DisplayName) : Tr("Download"));
             ResetProgress();
 
             var result = await _downloadService.DownloadTrainerAsync(
                 next,
                 _installedTrainerItems.ToList(),
                 _settings,
-                new Progress<string>(UpdateOperationStatus),
+                new Progress<string>(text => UpdateOperationStatus(LocalizeUserText(text))),
                 new Progress<DownloadProgressInfo>(UpdateProgress));
+            var localizedMessage = LocalizeUserText(result.Message);
 
             if (result.Success)
             {
-                AddStatusLine(result.Message, InfoBarSeverity.Success);
-                ShowNotification(Tr("Download"), result.Message, InfoBarSeverity.Success);
+                AddStatusLine(localizedMessage, InfoBarSeverity.Success);
+                ShowNotification(Tr("Download"), localizedMessage, InfoBarSeverity.Success);
                 if (!string.IsNullOrWhiteSpace(result.InstructionDirectory) && Directory.Exists(result.InstructionDirectory))
                 {
                     _processService.OpenWithShell(result.InstructionDirectory);
@@ -437,8 +495,8 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                AddStatusLine(result.Message, InfoBarSeverity.Error);
-                ShowNotification(Tr("Download Failed"), result.Message, InfoBarSeverity.Error);
+                AddStatusLine(localizedMessage, InfoBarSeverity.Error);
+                ShowNotification(Tr("Download Failed"), localizedMessage, InfoBarSeverity.Error);
             }
 
             await RefreshInstalledTrainersAsync();
@@ -472,7 +530,7 @@ public sealed partial class MainWindow : Window
     {
         if (_settings.AutoUpdateTranslations && _backendConfig.HasSignedDownloadConfig)
         {
-            await RunStatusOperationAsync("translations", "Updating translation data...", async () =>
+            await RunStatusOperationAsync("translations", Tr("Updating translation data..."), async () =>
             {
                 var success = await _trainerCatalogService.FetchTrainerTranslationsAsync();
                 AddStatusLine(Tr(success ? "Translation data updated." : "Translation data update failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
@@ -481,37 +539,37 @@ public sealed partial class MainWindow : Window
 
         if (_settings.AutoUpdateGCMData && _backendConfig.HasSignedDownloadConfig)
         {
-            await RunStatusOperationAsync("gcm", "Updating GCM data...", async () =>
+            await RunStatusOperationAsync("gcm", Tr("Updating GCM data..."), async () =>
             {
                 var success = await _trainerCatalogService.FetchGcmDataAsync();
-                AddStatusLine(success ? "GCM data updated." : "GCM data update failed.", success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+                AddStatusLine(Tr(success ? "GCM data updated." : "GCM data update failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
             });
         }
 
         if (_settings.AutoUpdateFlingData)
         {
-            await RunStatusOperationAsync("fling", "Updating FLiNG data...", async () =>
+            await RunStatusOperationAsync("fling", Tr("Updating FLiNG data..."), async () =>
             {
                 var success = await _trainerCatalogService.FetchFlingDataAsync(_settings);
-                AddStatusLine(success ? "FLiNG data updated." : "FLiNG data update failed.", success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+                AddStatusLine(Tr(success ? "FLiNG data updated." : "FLiNG data update failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
             });
         }
 
         if (_settings.EnableXiaoXing && _settings.AutoUpdateXiaoXingData && _backendConfig.HasSignedDownloadConfig)
         {
-            await RunStatusOperationAsync("xiaoxing", "Updating XiaoXing data...", async () =>
+            await RunStatusOperationAsync("xiaoxing", Tr("Updating XiaoXing data..."), async () =>
             {
                 var success = await _trainerCatalogService.FetchXiaoXingDataAsync();
-                AddStatusLine(success ? "XiaoXing data updated." : "XiaoXing data update failed.", success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+                AddStatusLine(Tr(success ? "XiaoXing data updated." : "XiaoXing data update failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
             });
         }
 
         if (_settings.EnableCT && _settings.AutoUpdateCTData && _backendConfig.HasSignedDownloadConfig)
         {
-            await RunStatusOperationAsync("ct", "Updating Cheat Table data...", async () =>
+            await RunStatusOperationAsync("ct", Tr("Updating Cheat Table data..."), async () =>
             {
                 var success = await _trainerCatalogService.FetchCheatTableDataAsync();
-                AddStatusLine(success ? "Cheat Table data updated." : "Cheat Table data update failed.", success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+                AddStatusLine(Tr(success ? "Cheat Table data updated." : "Cheat Table data update failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
             });
         }
 
@@ -530,21 +588,21 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await RunStatusOperationAsync("trainer-update", "Checking for trainer updates...", async () =>
+        await RunStatusOperationAsync("trainer-update", Tr("Checking for trainer updates..."), async () =>
         {
             var updates = await _trainerCatalogService.CheckTrainerUpdatesAsync(_installedTrainerItems, _settings, autoCheck);
             if (updates.Count == 0)
             {
                 if (!autoCheck)
                 {
-                    ShowNotification("Updates", "No trainer updates found.", InfoBarSeverity.Success);
+                    ShowNotification(Tr("Updates"), Tr("No trainer updates found."), InfoBarSeverity.Success);
                 }
 
-                AddStatusLine("No trainer updates found.");
+                AddStatusLine(Tr("No trainer updates found."));
                 return;
             }
 
-            AddStatusLine($"Found {updates.Count} trainer update(s).", InfoBarSeverity.Success);
+            AddStatusLine(Trf("Found {0} trainer update(s).", updates.Count), InfoBarSeverity.Success);
             foreach (var update in updates)
             {
                 await QueueDownloadAsync(update);
@@ -560,19 +618,19 @@ public sealed partial class MainWindow : Window
             if (!string.IsNullOrWhiteSpace(latestVersion) && UpdateService.IsNewerVersion(latestVersion, AppVersion))
             {
                 var updateNow = await ConfirmAsync(
-                    "Update Available",
-                    $"New version found: {AppVersion} -> {latestVersion}\n\nOpen the release page now?",
-                    "Open",
-                    "Later");
+                    Tr("Update Available"),
+                    Trf("New version found: {0} -> {1}\n\nOpen the release page now?", AppVersion, latestVersion),
+                    Tr("Open"),
+                    Tr("Later"));
                 if (updateNow)
                 {
-                    _processService.OpenUrl("https://github.com/dyang886/Game-Cheats-Manager/releases");
+                    _processService.OpenUrl(GithubReleasesLink);
                 }
             }
         }
         catch (Exception ex)
         {
-            AddStatusLine($"App update check failed: {ex.Message}", InfoBarSeverity.Warning);
+            AddStatusLine(Trf("App update check failed: {0}", ex.Message), InfoBarSeverity.Warning);
         }
     }
 
@@ -583,7 +641,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var dontShow = new CheckBox { Content = "Don't show again" };
+        var dontShow = new CheckBox { Content = Tr("Don't show again") };
         var content = new StackPanel
         {
             Spacing = 12,
@@ -591,7 +649,7 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = "This software is open source and provided free of charge. Resale is strictly prohibited.",
+                    Text = Tr("This software is open source and provided free of charge. Resale is strictly prohibited."),
                     TextWrapping = TextWrapping.Wrap
                 },
                 new HyperlinkButton { Content = WebsiteLink, NavigateUri = new Uri(WebsiteLink) },
@@ -601,7 +659,7 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var dialog = CreateDialog("Warning", content, closeButtonText: "OK");
+        var dialog = CreateDialog(Tr("Warning"), content, closeButtonText: Tr("OK"));
         await dialog.ShowAsync();
         if (dontShow.IsChecked == true)
         {
@@ -625,7 +683,7 @@ public sealed partial class MainWindow : Window
             var message = useChinese ? announcement.MessageZh : announcement.MessageEn;
 
             var dialog = CreateDialog(
-                string.IsNullOrWhiteSpace(title) ? "Announcement" : title,
+                string.IsNullOrWhiteSpace(title) ? Tr("Announcement") : title,
                 new ScrollViewer
                 {
                     MaxHeight = 400,
@@ -635,7 +693,7 @@ public sealed partial class MainWindow : Window
                         TextWrapping = TextWrapping.Wrap
                     }
                 },
-                closeButtonText: "OK");
+                closeButtonText: Tr("OK"));
             await dialog.ShowAsync();
 
             _settings.LastSeenAnnouncementId = announcement.Id;
@@ -643,7 +701,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AddStatusLine($"Announcement fetch failed: {ex.Message}", InfoBarSeverity.Warning);
+            AddStatusLine(Trf("Announcement fetch failed: {0}", ex.Message), InfoBarSeverity.Warning);
         }
     }
 
@@ -718,7 +776,7 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowAboutDialogAsync()
     {
-        var latestVersion = await _updateService.GetLatestVersionAsync("GCM") ?? "Unavailable";
+        var latestVersion = await _updateService.GetLatestVersionAsync("GCM") ?? Tr("Unavailable");
         var panel = new StackPanel
         {
             Spacing = 12,
@@ -738,7 +796,7 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowCheatEnginePromptAsync()
     {
-        var dontShowAgain = new CheckBox { Content = "Don't show again" };
+        var dontShowAgain = new CheckBox { Content = Tr("Don't show again") };
         var content = new StackPanel
         {
             Spacing = 12,
@@ -746,7 +804,7 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = ".ct/.cetrainer files require Cheat Engine to run. Please install Cheat Engine and open these files with it.",
+                    Text = Tr(".ct/.cetrainer files require Cheat Engine to run. Please install Cheat Engine and open these files with it."),
                     TextWrapping = TextWrapping.Wrap
                 },
                 new HyperlinkButton
@@ -757,7 +815,7 @@ public sealed partial class MainWindow : Window
                 dontShowAgain
             }
         };
-        var dialog = CreateDialog(Tr("Cheat Engine Required"), content, closeButtonText: "OK");
+        var dialog = CreateDialog(Tr("Cheat Engine Required"), content, closeButtonText: Tr("OK"));
         await dialog.ShowAsync();
         if (dontShowAgain.IsChecked == true)
         {
@@ -777,21 +835,21 @@ public sealed partial class MainWindow : Window
             }
         };
 
-    private static string GetCheatEngineStatus(string path) =>
+    private string GetCheatEngineStatus(string path) =>
         File.Exists(Path.Combine(path, "Cheat Engine.exe"))
-            ? "Cheat Engine is installed."
-            : "Please select a valid Cheat Engine installation path.";
+            ? Tr("Cheat Engine is installed.")
+            : Tr("Please select a valid Cheat Engine installation path.");
 
-    private static string GetCheatEvolutionStatus(string path)
+    private string GetCheatEvolutionStatus(string path)
     {
         if (File.Exists(Path.Combine(path, "CheatEvolution_patched.exe")))
         {
-            return "Cheat Evolution patch file is present.";
+            return Tr("Cheat Evolution patch file is present.");
         }
 
         return File.Exists(Path.Combine(path, "CheatEvolution.exe"))
-            ? "Cheat Evolution is installed and ready to patch."
-            : "Invalid Cheat Evolution installation path.";
+            ? Tr("Cheat Evolution is installed and ready to patch.")
+            : Tr("Invalid Cheat Evolution installation path.");
     }
 
     private async Task ShowTrainerManagementDialogAsync()
@@ -799,50 +857,50 @@ public sealed partial class MainWindow : Window
         var originalFlingServer = _settings.FlingDownloadServer;
         var originalEnableXiaoxing = _settings.EnableXiaoXing;
 
-        var enableGcm = new CheckBox { Content = "Enable search for GCM and Other trainers", IsChecked = _settings.EnableGCM };
-        var autoUpdateGcmData = new CheckBox { Content = "Update GCM data automatically", IsChecked = _settings.AutoUpdateGCMData };
-        var autoUpdateGcmTrainers = new CheckBox { Content = "Update GCM trainers automatically", IsChecked = _settings.AutoUpdateGCMTrainers };
+        var enableGcm = new CheckBox { Content = Tr("Enable search for GCM and Other trainers"), IsChecked = _settings.EnableGCM };
+        var autoUpdateGcmData = new CheckBox { Content = Tr("Update GCM data automatically"), IsChecked = _settings.AutoUpdateGCMData };
+        var autoUpdateGcmTrainers = new CheckBox { Content = Tr("Update GCM trainers automatically"), IsChecked = _settings.AutoUpdateGCMTrainers };
 
         var flingServer = new ComboBox { ItemsSource = new[] { "gcm", "official" }, SelectedItem = _settings.FlingDownloadServer };
-        var removeFlingMusic = new CheckBox { Content = "Remove trainer background music", IsChecked = _settings.RemoveFlingBgMusic };
-        var autoUpdateFlingData = new CheckBox { Content = "Update FLiNG data automatically", IsChecked = _settings.AutoUpdateFlingData };
-        var autoUpdateFlingTrainers = new CheckBox { Content = "Update FLiNG trainers automatically", IsChecked = _settings.AutoUpdateFlingTrainers };
+        var removeFlingMusic = new CheckBox { Content = Tr("Remove trainer background music"), IsChecked = _settings.RemoveFlingBgMusic };
+        var autoUpdateFlingData = new CheckBox { Content = Tr("Update FLiNG data automatically"), IsChecked = _settings.AutoUpdateFlingData };
+        var autoUpdateFlingTrainers = new CheckBox { Content = Tr("Update FLiNG trainers automatically"), IsChecked = _settings.AutoUpdateFlingTrainers };
 
-        var enableXiaoxing = new CheckBox { Content = "Enable search for XiaoXing trainers", IsChecked = _settings.EnableXiaoXing };
-        var unlockXiaoxing = new CheckBox { Content = "Unlock all XiaoXing functions", IsChecked = _settings.UnlockXiaoXing };
-        var autoUpdateXiaoxingData = new CheckBox { Content = "Update XiaoXing data automatically", IsChecked = _settings.AutoUpdateXiaoXingData };
-        var autoUpdateXiaoxingTrainers = new CheckBox { Content = "Update XiaoXing trainers automatically", IsChecked = _settings.AutoUpdateXiaoXingTrainers };
+        var enableXiaoxing = new CheckBox { Content = Tr("Enable search for XiaoXing trainers"), IsChecked = _settings.EnableXiaoXing };
+        var unlockXiaoxing = new CheckBox { Content = Tr("Unlock all XiaoXing functions"), IsChecked = _settings.UnlockXiaoXing };
+        var autoUpdateXiaoxingData = new CheckBox { Content = Tr("Update XiaoXing data automatically"), IsChecked = _settings.AutoUpdateXiaoXingData };
+        var autoUpdateXiaoxingTrainers = new CheckBox { Content = Tr("Update XiaoXing trainers automatically"), IsChecked = _settings.AutoUpdateXiaoXingTrainers };
 
         var cheatEnginePathBox = new TextBox { Text = _settings.CePath, IsReadOnly = true };
         var cheatEngineStatus = new TextBlock { Text = GetCheatEngineStatus(_settings.CePath) };
-        var addZhCn = new CheckBox { Content = "Add Simplified Chinese", IsChecked = false };
-        var enableCt = new CheckBox { Content = "Enable search for Cheat Tables", IsChecked = _settings.EnableCT };
-        var autoUpdateCtData = new CheckBox { Content = "Update Cheat Table data automatically", IsChecked = _settings.AutoUpdateCTData };
-        var autoUpdateCtTrainers = new CheckBox { Content = "Update Cheat Table trainers automatically", IsChecked = _settings.AutoUpdateCTTrainers };
+        var addZhCn = new CheckBox { Content = Tr("Add Simplified Chinese"), IsChecked = false };
+        var enableCt = new CheckBox { Content = Tr("Enable search for Cheat Tables"), IsChecked = _settings.EnableCT };
+        var autoUpdateCtData = new CheckBox { Content = Tr("Update Cheat Table data automatically"), IsChecked = _settings.AutoUpdateCTData };
+        var autoUpdateCtTrainers = new CheckBox { Content = Tr("Update Cheat Table trainers automatically"), IsChecked = _settings.AutoUpdateCTTrainers };
 
         var weModPathBox = new TextBox { Text = _settings.WeModPath, IsReadOnly = true };
         var weModVersions = _customizationService.FindWeModVersions(_settings.WeModPath);
-        var weModVersionCombo = new ComboBox { ItemsSource = weModVersions.Any() ? weModVersions : ["Wand not installed"], SelectedIndex = 0 };
+        var weModVersionCombo = new ComboBox { ItemsSource = weModVersions.Any() ? weModVersions : [Tr("Wand not installed")], SelectedIndex = 0 };
         var patchMethodCombo = new ComboBox { ItemsSource = new[] { "yearly_sub", "gifted_sub" }, SelectedIndex = 0 };
-        var enableWeModPro = new CheckBox { Content = "Activate Wand Pro", IsChecked = false };
-        var disableWeModUpdate = new CheckBox { Content = "Disable Wand Auto Update", IsChecked = false };
-        var deleteOtherWeModVersions = new CheckBox { Content = "Delete All Other Wand Versions", IsChecked = false };
+        var enableWeModPro = new CheckBox { Content = Tr("Activate Wand Pro"), IsChecked = false };
+        var disableWeModUpdate = new CheckBox { Content = Tr("Disable Wand Auto Update"), IsChecked = false };
+        var deleteOtherWeModVersions = new CheckBox { Content = Tr("Delete All Other Wand Versions"), IsChecked = false };
 
         var cevoPathBox = new TextBox { Text = _settings.CevoPath, IsReadOnly = true };
         var cevoStatus = new TextBlock { Text = GetCheatEvolutionStatus(_settings.CevoPath) };
-        var enableCevoPro = new CheckBox { Content = "Activate PRO", IsChecked = false };
+        var enableCevoPro = new CheckBox { Content = Tr("Activate PRO"), IsChecked = false };
 
-        var cheatEngineApplyButton = new Button { Content = "Apply Cheat Engine Changes" };
+        var cheatEngineApplyButton = new Button { Content = Tr("Apply Cheat Engine Changes") };
         cheatEngineApplyButton.Click += async (_, _) =>
         {
             if (addZhCn.IsChecked == true)
             {
                 var success = await _customizationService.AddCheatEngineTranslationAsync(cheatEnginePathBox.Text);
-                ShowNotification("Cheat Engine", success ? "Successfully added translation files." : "Failed to add translation files.", success ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+                ShowNotification("Cheat Engine", Tr(success ? "Successfully added translation files." : "Failed to add translation files."), success ? InfoBarSeverity.Success : InfoBarSeverity.Error);
             }
         };
 
-        var wemodApplyButton = new Button { Content = "Apply Wand Changes" };
+        var wemodApplyButton = new Button { Content = Tr("Apply Wand Changes") };
         wemodApplyButton.Click += async (_, _) =>
         {
             var messages = await _customizationService.ApplyWeModCustomizationAsync(
@@ -856,22 +914,22 @@ public sealed partial class MainWindow : Window
 
             foreach (var message in messages)
             {
-                AddStatusLine(message, message.Contains("fail", StringComparison.OrdinalIgnoreCase) ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
+                AddStatusLine(LocalizeUserText(message), message.Contains("fail", StringComparison.OrdinalIgnoreCase) ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
             }
         };
 
-        var cevoApplyButton = new Button { Content = "Apply Cheat Evolution Changes" };
+        var cevoApplyButton = new Button { Content = Tr("Apply Cheat Evolution Changes") };
         cevoApplyButton.Click += async (_, _) =>
         {
             if (enableCevoPro.IsChecked == true)
             {
                 var success = await _customizationService.ApplyCheatEvolutionPatchAsync(cevoPathBox.Text);
-                ShowNotification("Cheat Evolution", success ? "Patch successful." : "Patch failed.", success ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+                ShowNotification("Cheat Evolution", Tr(success ? "Patch successful." : "Patch failed."), success ? InfoBarSeverity.Success : InfoBarSeverity.Error);
                 cevoStatus.Text = GetCheatEvolutionStatus(cevoPathBox.Text);
             }
         };
 
-        var cheatEngineBrowseButton = new Button { Content = "Browse" };
+        var cheatEngineBrowseButton = new Button { Content = Tr("Browse") };
         cheatEngineBrowseButton.Click += async (_, _) =>
         {
             var path = await PickFolderAsync();
@@ -882,7 +940,7 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var wemodBrowseButton = new Button { Content = "Browse" };
+        var wemodBrowseButton = new Button { Content = Tr("Browse") };
         wemodBrowseButton.Click += async (_, _) =>
         {
             var path = await PickFolderAsync();
@@ -890,12 +948,12 @@ public sealed partial class MainWindow : Window
             {
                 weModPathBox.Text = path;
                 weModVersions = _customizationService.FindWeModVersions(path);
-                weModVersionCombo.ItemsSource = weModVersions.Any() ? weModVersions : ["Wand not installed"];
+                weModVersionCombo.ItemsSource = weModVersions.Any() ? weModVersions : [Tr("Wand not installed")];
                 weModVersionCombo.SelectedIndex = 0;
             }
         };
 
-        var cevoBrowseButton = new Button { Content = "Browse" };
+        var cevoBrowseButton = new Button { Content = Tr("Browse") };
         cevoBrowseButton.Click += async (_, _) =>
         {
             var path = await PickFolderAsync();
@@ -922,7 +980,7 @@ public sealed partial class MainWindow : Window
             Content = new StackPanel
             {
                 Spacing = 12,
-                Children = { LabeledControl("Download server", flingServer), removeFlingMusic, autoUpdateFlingData, autoUpdateFlingTrainers }
+                Children = { LabeledControl(Tr("Download server"), flingServer), removeFlingMusic, autoUpdateFlingData, autoUpdateFlingTrainers }
             }
         });
         tabs.TabItems.Add(new TabViewItem
@@ -942,7 +1000,7 @@ public sealed partial class MainWindow : Window
                 Content = new StackPanel
                 {
                     Spacing = 12,
-                    Children = { cheatEngineStatus, LabeledControl("Cheat Engine path", cheatEnginePathBox), cheatEngineBrowseButton, addZhCn, enableCt, autoUpdateCtData, autoUpdateCtTrainers, cheatEngineApplyButton }
+                    Children = { cheatEngineStatus, LabeledControl(Tr("Cheat Engine path"), cheatEnginePathBox), cheatEngineBrowseButton, addZhCn, enableCt, autoUpdateCtData, autoUpdateCtTrainers, cheatEngineApplyButton }
                 }
             }
         });
@@ -954,7 +1012,7 @@ public sealed partial class MainWindow : Window
                 Content = new StackPanel
                 {
                     Spacing = 12,
-                    Children = { LabeledControl("Wand path", weModPathBox), wemodBrowseButton, LabeledControl("Installed versions", weModVersionCombo), LabeledControl("Patch method", patchMethodCombo), enableWeModPro, disableWeModUpdate, deleteOtherWeModVersions, wemodApplyButton }
+                    Children = { LabeledControl(Tr("Wand path"), weModPathBox), wemodBrowseButton, LabeledControl(Tr("Installed versions"), weModVersionCombo), LabeledControl(Tr("Patch method"), patchMethodCombo), enableWeModPro, disableWeModUpdate, deleteOtherWeModVersions, wemodApplyButton }
                 }
             }
         });
@@ -966,7 +1024,7 @@ public sealed partial class MainWindow : Window
                 Content = new StackPanel
                 {
                     Spacing = 12,
-                    Children = { cevoStatus, LabeledControl("Cheat Evolution path", cevoPathBox), cevoBrowseButton, enableCevoPro, cevoApplyButton }
+                    Children = { cevoStatus, LabeledControl(Tr("Cheat Evolution path"), cevoPathBox), cevoBrowseButton, enableCevoPro, cevoApplyButton }
                 }
             }
         });
@@ -1011,11 +1069,11 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowUploadTrainerDialogAsync()
     {
-        var contactBox = new TextBox { PlaceholderText = "Email (optional)" };
-        var trainerNameBox = new TextBox { PlaceholderText = "Trainer name" };
-        var trainerSourceBox = new TextBox { PlaceholderText = "Original URL or author (optional)" };
-        var notesBox = new TextBox { AcceptsReturn = true, Height = 100, PlaceholderText = "Additional notes" };
-        var selectedFileBox = new TextBox { IsReadOnly = true, PlaceholderText = "Select a trainer file" };
+        var contactBox = new TextBox { PlaceholderText = Tr("Email (optional)") };
+        var trainerNameBox = new TextBox { PlaceholderText = Tr("Trainer name") };
+        var trainerSourceBox = new TextBox { PlaceholderText = Tr("Original URL or author (optional)") };
+        var notesBox = new TextBox { AcceptsReturn = true, Height = 100, PlaceholderText = Tr("Additional notes") };
+        var selectedFileBox = new TextBox { IsReadOnly = true, PlaceholderText = Tr("Select a trainer file") };
         var progressBar = new ProgressBar { Minimum = 0, Maximum = 100, Visibility = Visibility.Collapsed };
         var browseButton = new Button { Content = Tr("Browse") };
 
@@ -1136,14 +1194,14 @@ public sealed partial class MainWindow : Window
         {
             var message = string.IsNullOrWhiteSpace(result.Message)
                 ? Tr("Failed to start the trainer.")
-                : Tr(result.Message);
+                : LocalizeUserText(result.Message);
             ShowNotification(Tr("Launch Failed"), message, InfoBarSeverity.Error);
             AddStatusLine(message, InfoBarSeverity.Error);
             UpdateOperationStatus(Tr("Idle"));
             return;
         }
 
-        AddStatusLine($"{Tr("Launch")} {trainer.DisplayName}", InfoBarSeverity.Success);
+        AddStatusLine(Trf("Launch {0}", trainer.DisplayName), InfoBarSeverity.Success);
         UpdateOperationStatus(Tr("Idle"));
     }
 
@@ -1190,7 +1248,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (!await ConfirmAsync(Tr("Delete Trainer"), $"{Tr("Delete")} {trainer.DisplayName}?", Tr("Delete"), Tr("Cancel")))
+        if (!await ConfirmAsync(Tr("Delete Trainer"), Trf("Delete {0}?", trainer.DisplayName), Tr("Delete"), Tr("Cancel")))
         {
             return;
         }
@@ -1199,7 +1257,7 @@ public sealed partial class MainWindow : Window
         {
             await _trainerLibraryService.DeleteTrainerAsync(trainer);
             await RefreshInstalledTrainersAsync();
-            ShowNotification(Tr("Delete"), "Trainer deleted.", InfoBarSeverity.Success);
+            ShowNotification(Tr("Delete"), Tr("Trainer deleted."), InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
@@ -1222,7 +1280,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        AddStatusLine("Migrating existing trainers...");
+        AddStatusLine(Tr("Migrating existing trainers..."));
         await _trainerLibraryService.MoveDirectoryAsync(_settings.DownloadPath, changedPath);
         _settings.DownloadPath = changedPath;
         await _settingsService.SaveAsync(_settings);

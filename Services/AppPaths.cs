@@ -2,9 +2,9 @@ namespace GameCheatsManager.WinUI.Services;
 
 public static class AppPaths
 {
-    public static string WorkspaceRoot { get; } = ResolveWorkspaceRoot();
+    public static string AppRoot { get; } = ResolveAppRoot();
 
-    public static string OriginalProjectRoot { get; } = Path.Combine(WorkspaceRoot, "Game-Cheats-Manager");
+    public static string DependenciesRoot { get; } = Path.Combine(AppRoot, "Dependencies");
 
     public static string SettingsDirectory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -20,19 +20,19 @@ public static class AppPaths
 
     public static string WeModTempDirectory { get; } = Path.Combine(Path.GetTempPath(), "GameCheatsManagerTemp", "wemod");
 
-    public static string SevenZipPath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "7z", "7z.exe");
+    public static string SevenZipPath { get; } = Path.Combine(DependenciesRoot, "7z", "7z.exe");
 
-    public static string ResourceHackerPath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "ResourceHacker.exe");
+    public static string ResourceHackerPath { get; } = Path.Combine(DependenciesRoot, "ResourceHacker.exe");
 
-    public static string BinmayPath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "binmay.exe");
+    public static string BinmayPath { get; } = Path.Combine(DependenciesRoot, "binmay.exe");
 
-    public static string ElevatePath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "Elevate.exe");
+    public static string ElevatePath { get; } = Path.Combine(DependenciesRoot, "Elevate.exe");
 
-    public static string EmptyMidiPath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "TrainerBGM.mid");
+    public static string EmptyMidiPath { get; } = Path.Combine(DependenciesRoot, "TrainerBGM.mid");
 
-    public static string CheatEvolutionPatchedPath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "CheatEvolution_patched.exe");
+    public static string CheatEvolutionPatchedPath { get; } = Path.Combine(DependenciesRoot, "CheatEvolution_patched.exe");
 
-    public static string CheatEngineTranslationPath { get; } = Path.Combine(OriginalProjectRoot, "src", "dependency", "CE Translations", "zh_CN");
+    public static string CheatEngineTranslationPath { get; } = Path.Combine(DependenciesRoot, "CE Translations", "zh_CN");
 
     static AppPaths()
     {
@@ -99,12 +99,23 @@ public static class AppPaths
         return 0;
     }
 
-    private static string ResolveWorkspaceRoot()
+    private static string ResolveAppRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current is not null)
         {
-            if (Directory.Exists(Path.Combine(current.FullName, "Game-Cheats-Manager")))
+            if (File.Exists(Path.Combine(current.FullName, "GameCheatsManager.WinUI.csproj")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (Directory.Exists(Path.Combine(current.FullName, "Dependencies")))
             {
                 return current.FullName;
             }
